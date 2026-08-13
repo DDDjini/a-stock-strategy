@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 数据缓存（大文件）
+data_cache/*.parquet
+data_cache/minute/
+!data_cache/expanded_universe.csv
+!data_cache/history_120d.parquet
+
+# 结果文件（大文件）
+results/charts/
+results/*.csv
+results/*.json
+!results/ml_pattern_model.pkl
+
+# 网站大数据
+web/*.js
+!web/index.html
+
+# 临时文件
+*.tmp
+*.log
+monitor_state.json
+
+# 截图
+*.png
+*.jpg
+
+# 临时脚本
+_*.py
+diagnose*.py
+debug_*.py
+test_single.py
+test_small.py
+run_analysis.py
+run_core.py
+run_final.py
+run_full.py
+run_highwr.py
+run_enhanced_fix.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
