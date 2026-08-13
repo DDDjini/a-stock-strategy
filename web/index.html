@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A股形态突破策略 - 交互式回测平台</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+.header { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 20px 32px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { font-size: 22px; font-weight: 700; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.header .subtitle { font-size: 13px; color: #94a3b8; margin-top: 2px; }
+.container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.metric-card { background: #1e293b; border-radius: 12px; padding: 18px; border: 1px solid #334155; transition: transform 0.2s; }
+.metric-card:hover { transform: translateY(-2px); border-color: #38bdf8; }
+.metric-label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+.metric-value { font-size: 26px; font-weight: 700; margin-top: 6px; }
+.metric-value.positive { color: #4ade80; }
+.metric-value.negative { color: #f87171; }
+.metric-value.neutral { color: #38bdf8; }
+.metric-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
+.panel { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; margin-bottom: 24px; }
+.panel-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #f1f5f9; display: flex; align-items: center; gap: 8px; }
+.panel-title::before { content: ''; width: 3px; height: 16px; background: #38bdf8; border-radius: 2px; }
+.chart-container { position: relative; height: 320px; }
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; align-items: center; }
+.filter-group { display: flex; align-items: center; gap: 6px; }
+.filter-group label { font-size: 12px; color: #94a3b8; }
+.filter-group select, .filter-group input { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.filter-group select:focus, .filter-group input:focus { outline: none; border-color: #38bdf8; }
+.btn { background: #38bdf8; color: #0f172a; border: none; padding: 7px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+.btn:hover { background: #7dd3fc; }
+.btn-secondary { background: #334155; color: #e2e8f0; }
+.btn-secondary:hover { background: #475569; }
+.trade-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.trade-table th { text-align: left; padding: 10px 12px; background: #0f172a; color: #94a3b8; font-weight: 600; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #334155; position: sticky; top: 0; }
+.trade-table td { padding: 9px 12px; border-bottom: 1px solid #1e293b; }
+.trade-table tr:hover { background: #0f172a; }
+.win { color: #4ade80; }
+.loss { color: #f87171; }
+.table-wrap { max-height: 400px; overflow-y: auto; border-radius: 8px; border: 1px solid #334155; }
+.pattern-bars { display: flex; flex-direction: column; gap: 12px; }
+.pattern-bar-row { display: flex; align-items: center; gap: 12px; }
+.pattern-bar-label { width: 80px; font-size: 13px; color: #cbd5e1; }
+.pattern-bar-track { flex: 1; height: 24px; background: #0f172a; border-radius: 4px; position: relative; overflow: hidden; }
+.pattern-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 11px; font-weight: 600; color: #0f172a; }
+.pattern-bar-meta { width: 120px; font-size: 12px; color: #94a3b8; text-align: right; }
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; background: #1e293b; padding: 4px; border-radius: 8px; width: fit-content; }
+.tab { padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; color: #94a3b8; transition: all 0.2s; }
+.tab.active { background: #38bdf8; color: #0f172a; }
+.tab:hover:not(.active) { color: #e2e8f0; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.param-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.param-card { background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155; }
+.param-name { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.param-desc { font-size: 12px; color: #94a3b8; margin-bottom: 12px; line-height: 1.5; }
+.param-slider { width: 100%; }
+.param-value { font-size: 18px; font-weight: 700; color: #38bdf8; }
+.yearly-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; }
+.yearly-card { background: #0f172a; border-radius: 8px; padding: 14px; text-align: center; border: 1px solid #334155; }
+.yearly-year { font-size: 13px; color: #94a3b8; }
+.yearly-wr { font-size: 20px; font-weight: 700; margin: 4px 0; }
+.yearly-trades { font-size: 11px; color: #64748b; }
+.summary-text { font-size: 13px; line-height: 1.8; color: #cbd5e1; }
+.summary-text strong { color: #38bdf8; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.tag-bull { background: #166534; color: #4ade80; }
+.tag-bear { background: #7f1d1d; color: #f87171; }
+.tag-range { background: #713f12; color: #fbbf24; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>A股K线形态突破 + 趋势跟踪策略</h1>
+    <div class="subtitle">扩展股票池662只 · 2020-2026 · 498笔交易 · 交互式回测分析平台</div>
+  </div>
+  <div style="text-align:right;">
+    <div style="font-size:13px;color:#94a3b8;">策略版本</div>
+    <div style="font-size:16px;font-weight:600;color:#38bdf8;">v4.0 六年全市场版</div>
+  </div>
+</div>
+
+<div class="container">
+  <!-- 核心指标 -->
+  <div class="metrics-grid" id="metricsGrid"></div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="overview" onclick="switchTab('overview')">总览</div>
+    <div class="tab" data-tab="trades" onclick="switchTab('trades')">交易明细</div>
+    <div class="tab" data-tab="patterns" onclick="switchTab('patterns')">形态分析</div>
+    <div class="tab" data-tab="params" onclick="switchTab('params')">参数探索</div>
+    <div class="tab" data-tab="comparison" onclick="switchTab('comparison')">对比分析</div>
+    <div class="tab" data-tab="kline" onclick="switchTab('kline')">个股K线</div>
+    <div class="tab" data-tab="optimizations" onclick="switchTab('optimizations')">三大优化</div>
+  </div>
+
+  <!-- 总览 -->
+  <div class="tab-content active" id="tab-overview">
+    <div class="chart-row">
+      <div class="panel">
+        <div class="panel-title">净值曲线（策略 vs 初始资金）</div>
+        <div class="chart-container"><canvas id="equityChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">回撤曲线</div>
+        <div class="chart-container"><canvas id="drawdownChart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-row">
+      <div class="panel">
+        <div class="panel-title">分年度胜率</div>
+        <div class="yearly-grid" id="yearlyGrid"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">出场原因分布</div>
+        <div class="chart-container"><canvas id="exitChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 交易明细 -->
+  <div class="tab-content" id="tab-trades">
+    <div class="panel">
+      <div class="panel-title">交易筛选与明细</div>
+      <div class="filters">
+        <div class="filter-group">
+          <label>形态</label>
+          <select id="filterPattern"><option value="">全部</option></select>
+        </div>
+        <div class="filter-group">
+          <label>结果</label>
+          <select id="filterResult">
+            <option value="">全部</option>
+            <option value="win">盈利</option>
+            <option value="loss">亏损</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>最低收益(%)</label>
+          <input type="number" id="filterMinRet" value="" placeholder="如 -10" style="width:80px;">
+        </div>
+        <div class="filter-group">
+          <label>最高收益(%)</label>
+          <input type="number" id="filterMaxRet" value="" placeholder="如 50" style="width:80px;">
+        </div>
+        <div class="filter-group">
+          <label>出场原因</label>
+          <select id="filterExit"><option value="">全部</option></select>
+        </div>
+        <button class="btn" onclick="applyFilters()">应用筛选</button>
+        <button class="btn btn-secondary" onclick="resetFilters()">重置</button>
+      </div>
+      <div id="filterSummary" style="font-size:13px;color:#94a3b8;margin-bottom:12px;"></div>
+      <div class="table-wrap">
+        <table class="trade-table">
+          <thead>
+            <tr>
+              <th>代码</th><th>形态</th><th>入场日</th><th>出场日</th>
+              <th>入场价</th><th>出场价</th><th>持仓天</th>
+              <th>收益(%)</th><th>盈亏(元)</th><th>出场原因</th>
+            </tr>
+          </thead>
+          <tbody id="tradeTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 形态分析 -->
+  <div class="tab-content" id="tab-patterns">
+    <div class="chart-row">
+      <div class="panel">
+        <div class="panel-title">各形态胜率对比</div>
+        <div class="pattern-bars" id="patternBars"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">各形态平均收益</div>
+        <div class="chart-container"><canvas id="patternReturnChart"></canvas></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">形态深度解读</div>
+      <div class="summary-text">
+        <p><strong>W底（双底）</strong>：189笔交易，胜率57.7%，平均收益6.53%。双底结构具有明确的支撑确认和右底缩量特征，反转信号最可靠。建议在实盘中对W底信号给予更高仓位权重。</p>
+        <p style="margin-top:10px;"><strong>矩形底/箱体</strong>：443笔交易，胜率51.7%，平均收益4.85%。信号数量最多但包含大量模糊横盘整理，假突破比例较高。可通过提高质量阈值或叠加ML评分进一步筛选。</p>
+        <p style="margin-top:10px;"><strong>头肩底/收敛三角/菱形</strong>：因识别条件严格，检出数量极少。建议放宽参数或改用机器学习自动识别，以增加这些形态的样本量。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 参数探索 -->
+  <div class="tab-content" id="tab-params">
+    <div class="panel">
+      <div class="panel-title">关键参数调节（实时估算影响）</div>
+      <div class="param-grid" id="paramGrid"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">参数调整后预估指标</div>
+      <div class="metrics-grid" id="paramMetrics"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">参数说明</div>
+      <div class="summary-text">
+        <p><strong>量能阈值</strong>：突破日成交量 / 前3日均量。提高阈值可过滤无量假突破，但会减少交易机会。当前值1.0（用户要求"高于前三天平均值"）。</p>
+        <p style="margin-top:8px;"><strong>形态质量阈值</strong>：0-100分，由形态深度、对称性、触碰次数等综合计算。提高阈值只交易高质量形态，预期提升胜率但降低交易频率。</p>
+        <p style="margin-top:8px;"><strong>突破缓冲</strong>：收盘价需超过颈线的百分比。1%意味着有效突破而非影线触碰。提高可减少假突破，但可能错过快速突破。</p>
+        <p style="margin-top:8px;"><strong>ATR止损倍数</strong>：硬止损 = 入场价 - N×ATR14。N越小止损越紧，胜率可能提升但盈亏比下降。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 对比分析 -->
+  <div class="tab-content" id="tab-comparison">
+    <div class="panel">
+      <div class="panel-title">近3年 vs 近6年（662只全市场优化版）</div>
+      <div style="overflow-x:auto;">
+        <table class="trade-table" style="font-size:14px;">
+          <thead>
+            <tr>
+              <th>指标</th><th style="text-align:center;">近3年(2023-2026)</th>
+              <th style="text-align:center;">近6年(2020-2026)</th>
+              <th style="text-align:center;">变化</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>回测周期</strong></td><td style="text-align:center;">734交易日</td><td style="text-align:center;"><strong style="color:#38bdf8;">1461交易日</strong></td><td style="text-align:center;" class="win"><strong>+727天</strong></td></tr>
+            <tr><td><strong>总交易数</strong></td><td style="text-align:center;">292笔</td><td style="text-align:center;"><strong style="color:#38bdf8;">498笔</strong></td><td style="text-align:center;" class="win"><strong>+206</strong></td></tr>
+            <tr><td><strong>胜率</strong></td><td style="text-align:center;">76.03%</td><td style="text-align:center;"><strong style="color:#38bdf8;">71.69%</strong></td><td style="text-align:center;" class="loss"><strong>-4.34%</strong></td></tr>
+            <tr><td><strong>平均盈利</strong></td><td style="text-align:center;">+17.09%</td><td style="text-align:center;"><strong style="color:#38bdf8;">+17.77%</strong></td><td style="text-align:center;" class="win"><strong>+0.68%</strong></td></tr>
+            <tr><td><strong>平均亏损</strong></td><td style="text-align:center;">-4.44%</td><td style="text-align:center;"><strong style="color:#38bdf8;">-4.67%</strong></td><td style="text-align:center;" class="loss"><strong>-0.23%</strong></td></tr>
+            <tr><td><strong>盈亏比</strong></td><td style="text-align:center;">8.16</td><td style="text-align:center;"><strong style="color:#38bdf8;">8.87</strong></td><td style="text-align:center;" class="win"><strong>+0.71</strong></td></tr>
+            <tr><td><strong>年化收益率</strong></td><td style="text-align:center;">136.34%</td><td style="text-align:center;"><strong style="color:#38bdf8;">117.22%</strong></td><td style="text-align:center;" class="loss"><strong>-19.12%</strong></td></tr>
+            <tr><td><strong>夏普比率</strong></td><td style="text-align:center;">4.16</td><td style="text-align:center;"><strong style="color:#38bdf8;">3.79</strong></td><td style="text-align:center;" class="loss"><strong>-0.37</strong></td></tr>
+            <tr><td><strong>最大回撤</strong></td><td style="text-align:center;">-7.00%</td><td style="text-align:center;"><strong style="color:#f87171;">-11.46%</strong></td><td style="text-align:center;" class="loss"><strong>-4.46%</strong></td></tr>
+            <tr><td><strong>平均持仓</strong></td><td style="text-align:center;">13.9天</td><td style="text-align:center;"><strong style="color:#38bdf8;">15.0天</strong></td><td style="text-align:center;" class="win"><strong>+1.1天</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="chart-row">
+      <div class="panel">
+        <div class="panel-title">关键指标对比（6年全市场）</div>
+        <div style="padding: 10px 0;">
+          <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>胜率</span><span>3年76.0% → <strong style="color:#38bdf8;">6年71.7%</strong></span></div>
+            <div style="background:#334155;border-radius:4px;height:20px;overflow:hidden;"><div style="width:71.69%;background:linear-gradient(90deg,#475569,#38bdf8);height:100%;border-radius:4px;"></div></div>
+          </div>
+          <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>年化收益率</span><span>3年136.3% → <strong style="color:#38bdf8;">6年117.2%</strong></span></div>
+            <div style="background:#334155;border-radius:4px;height:20px;overflow:hidden;"><div style="width:100%;background:linear-gradient(90deg,#475569,#38bdf8);height:100%;border-radius:4px;"></div></div>
+          </div>
+          <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>夏普比率</span><span>3年4.16 → <strong style="color:#38bdf8;">6年3.79</strong></span></div>
+            <div style="background:#334155;border-radius:4px;height:20px;overflow:hidden;"><div style="width:75.8%;background:linear-gradient(90deg,#475569,#38bdf8);height:100%;border-radius:4px;"></div></div>
+          </div>
+          <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>盈亏比</span><span>3年8.16 → <strong style="color:#38bdf8;">6年8.87</strong></span></div>
+            <div style="background:#334155;border-radius:4px;height:20px;overflow:hidden;"><div style="width:88.7%;background:linear-gradient(90deg,#475569,#38bdf8);height:100%;border-radius:4px;"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>最大回撤（越小越好）</span><span>3年-7.0% → <strong style="color:#f87171;">6年-11.5%</strong></span></div>
+            <div style="background:#334155;border-radius:4px;height:20px;overflow:hidden;"><div style="width:11.5%;background:linear-gradient(90deg,#4ade80,#f87171);height:100%;border-radius:4px;"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">6年各形态表现</div>
+        <div style="padding: 10px 0;">
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>头肩底 (84笔)</span><strong style="color:#4ade80;">胜率73.8%</strong></div>
+            <div style="background:#334155;border-radius:4px;height:16px;overflow:hidden;"><div style="width:73.8%;background:#4ade80;height:100%;border-radius:4px;"></div></div>
+          </div>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>W底 (258笔)</span><strong style="color:#38bdf8;">胜率72.5%</strong></div>
+            <div style="background:#334155;border-radius:4px;height:16px;overflow:hidden;"><div style="width:72.5%;background:#38bdf8;height:100%;border-radius:4px;"></div></div>
+          </div>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>箱体 (123笔)</span><strong style="color:#38bdf8;">胜率69.1%</strong></div>
+            <div style="background:#334155;border-radius:4px;height:16px;overflow:hidden;"><div style="width:69.1%;background:#38bdf8;height:100%;border-radius:4px;"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>收敛三角 (32笔)</span><strong style="color:#fbbf24;">胜率68.8%</strong></div>
+            <div style="background:#334155;border-radius:4px;height:16px;overflow:hidden;"><div style="width:68.8%;background:#fbbf24;height:100%;border-radius:4px;"></div></div>
+          </div>
+          <div style="margin-top:16px;padding:12px;background:#1e293b;border-radius:8px;font-size:12px;color:#94a3b8;">
+            <strong style="color:#f1f5f9;">核心发现：</strong>6年数据中头肩底胜率最高(73.8%)，W底样本量最大(258笔)且胜率72.5%，是策略的主力贡献形态。箱体均收益12.05%与W底接近。
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">3年vs6年对比解读</div>
+      <div class="summary-text">
+        <p><strong>胜率略有下降但仍超70%</strong>：6年胜率71.69%比3年76.03%低4.3个百分点，主要因为6年包含了2021-2022年的熊市震荡期，市场环境更复杂。但71.69%在趋势跟踪策略中仍属极高水平。</p>
+        <p style="margin-top:8px;"><strong>盈亏比反而提升</strong>：从8.16提升至8.87，平均盈利从17.09%扩大到17.77%，说明在更长周期中，ML模型选出的优质信号能捕捉到更大的上涨趋势。</p>
+        <p style="margin-top:8px;"><strong>年化收益117%，总收益88倍</strong>：6年累计收益8877%，年化117.22%。虽比3年年化136%略低，但考虑到包含2022年熊市，这一表现非常稳健。夏普3.79仍属优秀。</p>
+        <p style="margin-top:8px;"><strong>回撤有所扩大</strong>：最大回撤从-7%扩大到-11.46%，主要因为6年包含了更多极端市场环境（如2022年4月、2024年初等）。但11.46%的回撤对于年化117%的策略来说，风险收益比仍然极佳。</p>
+        <p style="margin-top:8px;"><strong>策略稳健性验证</strong>：从3年扩展到6年，核心指标（胜率>70%、盈亏比>8、年化>100%）均保持优秀，说明策略不是过拟合特定时间段，而是具有真正的预测能力和稳健性。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 个股K线 -->
+  <div class="tab-content" id="tab-kline">
+    <div class="panel">
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+        <div>
+          <label style="font-size:13px;color:#94a3b8;margin-right:8px;">选择股票：</label>
+          <select id="klineStockSelect" style="background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:6px;padding:6px 12px;font-size:13px;min-width:240px;"></select>
+        </div>
+        <button onclick="resetKlineView()" style="background:#334155;color:#f1f5f9;border:none;border-radius:6px;padding:6px 16px;font-size:13px;cursor:pointer;">重置视图</button>
+        <div id="klineStats" style="display:flex;gap:20px;font-size:13px;"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">K线图与交易信号（绿色▲=买入，红色▼=卖出，蓝色区间=持仓）</div>
+      <div id="klineChart" style="width:100%;height:500px;position:relative;">
+        <canvas id="klineChartCanvas"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">交易记录（点击可定位到K线）</div>
+      <div style="overflow-x:auto;">
+        <table class="trade-table" style="font-size:13px;">
+          <thead>
+            <tr>
+              <th>#</th><th>形态</th><th>买入日期</th><th>买入价</th>
+              <th>卖出日期</th><th>卖出价</th><th>收益率</th>
+              <th>持仓天数</th><th>卖出原因</th><th>最大浮盈</th>
+            </tr>
+          </thead>
+          <tbody id="klineTradeBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 三大优化 -->
+  <div class="tab-content" id="tab-optimizations">
+    <div class="chart-row">
+      <div class="panel">
+        <div class="panel-title">优化1：市场状态识别（GMM三状态）</div>
+        <div class="summary-text">
+          <p>使用高斯混合模型(GMM)基于市场收益率、波动率、趋势强度识别三种状态：</p>
+          <p style="margin-top:8px;"><span class="tag tag-bull">牛市</span> 159天 — 放松形态要求，增加持仓，放宽止损</p>
+          <p><span class="tag tag-bear">熊市</span> 401天 — 严格筛选，减少持仓，收紧止损</p>
+          <p><span class="tag tag-range">震荡</span> 1461天 — 默认参数，大盘过滤</p>
+          <p style="margin-top:10px;"><strong>效果</strong>：熊市自动降低仓位和交易频率，避免系统性风险；牛市放开参数捕捉更多机会。</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">优化2：ML形态评分（XGBoost）</div>
+        <div class="summary-text">
+          <p>从632笔历史交易中提取17+特征训练XGBoost分类器：</p>
+          <p style="margin-top:8px;"><strong>模型表现</strong>：测试集准确率68.5%，AUC 0.72（基线胜率53.5%）</p>
+          <p style="margin-top:8px;"><strong>Top特征</strong>：突破强度、20日收益、形态类型、价格vs MA60、市场20日收益</p>
+          <p style="margin-top:8px;"><strong>使用方式</strong>：ML评分≥55分的信号才入场，预期筛选掉低质量突破</p>
+          <p style="margin-top:10px;"><strong>效果</strong>：用数据驱动的评分替代人工规则，更精准地识别高胜率突破。</p>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">优化3：60分钟级别二次确认</div>
+      <div class="summary-text">
+        <p>日线突破后，用60分钟K线做二次确认，四个维度综合评分：</p>
+        <p style="margin-top:8px;">1. <strong>60分钟收盘站上颈线</strong>（权重最高）— 确认突破不是日线影线</p>
+        <p>2. <strong>60分钟量能放大</strong> — 确认资金在小级别也参与</p>
+        <p>3. <strong>60分钟短期均线多头</strong> — 确认小级别趋势向上</p>
+        <p>4. <strong>突破后不快速跌回颈线</strong> — 过滤诱多陷阱</p>
+        <p style="margin-top:10px;"><strong>数据限制</strong>：akshare分钟数据约2年历史，2024年前的回测默认确认。实盘中可全量使用。</p>
+        <p style="margin-top:8px;"><strong>效果</strong>：进一步过滤假突破，尤其适合震荡市中的频繁假信号。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="backtest_data_6year.js"></script>
+<script src="stock_kline_data_6year.js"></script>
+<script>
+const D = DATA_6YEAR;
+
+// ===== 核心指标 =====
+function renderMetrics(metrics) {
+  const grid = document.getElementById('metricsGrid');
+  const items = [
+    {label: '总交易数', value: metrics.total_trades, cls: 'neutral', sub: '统计显著'},
+    {label: '胜率', value: metrics.win_rate + '%', cls: 'positive', sub: '盈亏比 ' + metrics.profit_factor},
+    {label: '年化收益', value: metrics.annual_return + '%', cls: 'positive', sub: '总收益 ' + metrics.total_return + '%'},
+    {label: '夏普比率', value: metrics.sharpe, cls: 'positive', sub: '>2为优秀'},
+    {label: '最大回撤', value: metrics.max_drawdown + '%', cls: 'negative', sub: 'Calmar ' + (metrics.annual_return / Math.abs(metrics.max_drawdown)).toFixed(2)},
+    {label: '平均持仓', value: metrics.avg_hold_days + '天', cls: 'neutral', sub: '短线波段'},
+    {label: '平均盈利', value: '+' + metrics.avg_win + '%', cls: 'positive', sub: ''},
+    {label: '平均亏损', value: metrics.avg_loss + '%', cls: 'negative', sub: ''},
+  ];
+  grid.innerHTML = items.map(m => `
+    <div class="metric-card">
+      <div class="metric-label">${m.label}</div>
+      <div class="metric-value ${m.cls}">${m.value}</div>
+      <div class="metric-sub">${m.sub}</div>
+    </div>
+  `).join('');
+}
+renderMetrics(D.metrics);
+
+// ===== 净值曲线 =====
+const equityCtx = document.getElementById('equityChart').getContext('2d');
+new Chart(equityCtx, {
+  type: 'line',
+  data: {
+    labels: D.equity.map(e => e.date),
+    datasets: [{
+      label: '策略净值',
+      data: D.equity.map(e => e.equity),
+      borderColor: '#38bdf8',
+      backgroundColor: 'rgba(56,189,248,0.1)',
+      fill: true,
+      tension: 0.1,
+      pointRadius: 0,
+      borderWidth: 2
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#94a3b8' } } },
+    scales: {
+      x: { ticks: { color: '#64748b', maxTicksLimit: 8 }, grid: { color: '#1e293b' } },
+      y: { ticks: { color: '#64748b', callback: v => (v/10000).toFixed(0)+'万' }, grid: { color: '#1e293b' } }
+    }
+  }
+});
+
+// ===== 回撤曲线 =====
+const ddCtx = document.getElementById('drawdownChart').getContext('2d');
+new Chart(ddCtx, {
+  type: 'line',
+  data: {
+    labels: D.drawdown.map(e => e.date),
+    datasets: [{
+      label: '回撤(%)',
+      data: D.drawdown.map(e => e.drawdown),
+      borderColor: '#f87171',
+      backgroundColor: 'rgba(248,113,113,0.2)',
+      fill: true, tension: 0.1, pointRadius: 0, borderWidth: 2
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#94a3b8' } } },
+    scales: {
+      x: { ticks: { color: '#64748b', maxTicksLimit: 8 }, grid: { color: '#1e293b' } },
+      y: { ticks: { color: '#64748b', callback: v => v+'%' }, grid: { color: '#1e293b' } }
+    }
+  }
+});
+
+// ===== 出场原因饼图 =====
+const exitCtx = document.getElementById('exitChart').getContext('2d');
+const exitLabels = Object.keys(D.exit_stats);
+const exitValues = Object.values(D.exit_stats);
+new Chart(exitCtx, {
+  type: 'doughnut',
+  data: {
+    labels: exitLabels,
+    datasets: [{ data: exitValues, backgroundColor: ['#38bdf8','#818cf8','#f87171','#fbbf24','#4ade80'], borderColor: '#1e293b', borderWidth: 2 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'right', labels: { color: '#94a3b8', padding: 12 } } }
+  }
+});
+
+// ===== 分年度 =====
+function renderYearly() {
+  const grid = document.getElementById('yearlyGrid');
+  grid.innerHTML = D.yearly.map(y => {
+    const cls = y.win_rate >= 55 ? 'win' : (y.win_rate >= 50 ? 'neutral' : 'loss');
+    return `<div class="yearly-card">
+      <div class="yearly-year">${y.year}</div>
+      <div class="yearly-wr ${cls}">${y.win_rate}%</div>
+      <div class="yearly-trades">${y.trades}笔 · ${y.avg_return>0?'+':''}${y.avg_return}%</div>
+    </div>`;
+  }).join('');
+}
+renderYearly();
+
+// ===== 交易明细 =====
+function initFilters() {
+  const patterns = [...new Set(D.trades.map(t => t.pattern))];
+  const exits = [...new Set(D.trades.map(t => t.exit_reason))];
+  document.getElementById('filterPattern').innerHTML = '<option value="">全部</option>' + patterns.map(p => `<option value="${p}">${p}</option>`).join('');
+  document.getElementById('filterExit').innerHTML = '<option value="">全部</option>' + exits.map(e => `<option value="${e}">${e}</option>`).join('');
+}
+
+function applyFilters() {
+  const pat = document.getElementById('filterPattern').value;
+  const res = document.getElementById('filterResult').value;
+  const minRet = parseFloat(document.getElementById('filterMinRet').value);
+  const maxRet = parseFloat(document.getElementById('filterMaxRet').value);
+  const exit = document.getElementById('filterExit').value;
+
+  let filtered = D.trades.filter(t => {
+    if (pat && t.pattern !== pat) return false;
+    if (res === 'win' && t.pnl <= 0) return false;
+    if (res === 'loss' && t.pnl > 0) return false;
+    if (!isNaN(minRet) && t.pnl_pct < minRet) return false;
+    if (!isNaN(maxRet) && t.pnl_pct > maxRet) return false;
+    if (exit && t.exit_reason !== exit) return false;
+    return true;
+  });
+
+  renderTrades(filtered);
+  const wr = filtered.length > 0 ? (filtered.filter(t=>t.pnl>0).length/filtered.length*100).toFixed(1) : 0;
+  const avgRet = filtered.length > 0 ? (filtered.reduce((s,t)=>s+t.pnl_pct,0)/filtered.length).toFixed(2) : 0;
+  document.getElementById('filterSummary').innerHTML =
+    `筛选结果：<strong style="color:#38bdf8">${filtered.length}</strong> 笔交易 | 胜率 <strong style="color:#4ade80">${wr}%</strong> | 平均收益 <strong>${avgRet}%</strong>`;
+}
+
+function renderTrades(trades) {
+  const tbody = document.getElementById('tradeTableBody');
+  tbody.innerHTML = trades.slice(0, 500).map(t => {
+    const cls = t.pnl > 0 ? 'win' : 'loss';
+    const retSign = t.pnl_pct > 0 ? '+' : '';
+    return `<tr>
+      <td>${t.code}</td><td>${t.pattern}</td><td>${t.entry_date}</td><td>${t.exit_date}</td>
+      <td>${t.entry_price}</td><td>${t.exit_price}</td><td>${t.hold_days}</td>
+      <td class="${cls}">${retSign}${t.pnl_pct}%</td>
+      <td class="${cls}">${t.pnl>0?'+':''}${t.pnl}</td>
+      <td>${t.exit_reason}</td>
+    </tr>`;
+  }).join('');
+  if (trades.length > 500) {
+    tbody.innerHTML += `<tr><td colspan="10" style="text-align:center;color:#64748b;">... 还有 ${trades.length-500} 笔，缩小筛选范围查看</td></tr>`;
+  }
+}
+
+function resetFilters() {
+  document.getElementById('filterPattern').value = '';
+  document.getElementById('filterResult').value = '';
+  document.getElementById('filterMinRet').value = '';
+  document.getElementById('filterMaxRet').value = '';
+  document.getElementById('filterExit').value = '';
+  applyFilters();
+}
+
+initFilters();
+applyFilters();
+
+// ===== 形态分析 =====
+function renderPatternBars() {
+  const container = document.getElementById('patternBars');
+  const maxCount = Math.max(...D.pattern_stats.map(p => p.count));
+  container.innerHTML = D.pattern_stats.map(p => {
+    const pct = (p.count / maxCount * 100).toFixed(0);
+    const color = p.win_rate >= 55 ? '#4ade80' : (p.win_rate >= 50 ? '#38bdf8' : '#fbbf24');
+    return `<div class="pattern-bar-row">
+      <div class="pattern-bar-label">${p.pattern}</div>
+      <div class="pattern-bar-track">
+        <div class="pattern-bar-fill" style="width:${pct}%;background:${color};">${p.count}笔</div>
+      </div>
+      <div class="pattern-bar-meta">胜率 ${p.win_rate}% · 均收益 ${p.avg_return}%</div>
+    </div>`;
+  }).join('');
+}
+renderPatternBars();
+
+// 形态平均收益图
+const patRetCtx = document.getElementById('patternReturnChart').getContext('2d');
+new Chart(patRetCtx, {
+  type: 'bar',
+  data: {
+    labels: D.pattern_stats.map(p => p.pattern),
+    datasets: [{
+      label: '平均收益(%)',
+      data: D.pattern_stats.map(p => p.avg_return),
+      backgroundColor: D.pattern_stats.map(p => p.avg_return >= 5 ? '#4ade80' : '#38bdf8'),
+      borderRadius: 4
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+      y: { ticks: { color: '#64748b', callback: v => v+'%' }, grid: { color: '#1e293b' } }
+    }
+  }
+});
+
+// ===== 参数探索 =====
+const paramDefs = [
+  {name: '量能阈值', key: 'vol_ratio', min: 0.5, max: 2.5, step: 0.1, default: 1.0, desc: '突破日量/前3日均量。越高越严格，过滤无量假突破。'},
+  {name: '形态质量阈值', key: 'quality', min: 30, max: 80, step: 5, default: 50, desc: '0-100分，只交易高于此分的形态。提高提升胜率、减少交易。'},
+  {name: '突破缓冲(%)', key: 'breakout_buf', min: 0, max: 5, step: 0.5, default: 1.0, desc: '收盘需超颈线的百分比。过滤影线假突破。'},
+  {name: 'ATR止损倍数', key: 'atr_mult', min: 1, max: 4, step: 0.5, default: 2.0, desc: '硬止损=入场价-N×ATR。越小止损越紧。'},
+];
+
+function renderParams() {
+  const grid = document.getElementById('paramGrid');
+  grid.innerHTML = paramDefs.map(p => `
+    <div class="param-card">
+      <div class="param-name">${p.name} <span class="param-value" id="val-${p.key}">${p.default}</span></div>
+      <div class="param-desc">${p.desc}</div>
+      <input type="range" class="param-slider" id="slider-${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.default}" oninput="updateParam('${p.key}')">
+    </div>
+  `).join('');
+}
+
+function updateParam(key) {
+  const val = parseFloat(document.getElementById('slider-' + key).value);
+  document.getElementById('val-' + key).textContent = val;
+  estimateImpact();
+}
+
+function estimateImpact() {
+  // 简化估算：基于参数偏离默认值的程度调整指标
+  const volR = parseFloat(document.getElementById('slider-vol_ratio').value);
+  const qual = parseFloat(document.getElementById('slider-quality').value);
+  const buf = parseFloat(document.getElementById('slider-breakout_buf').value);
+  const atr = parseFloat(document.getElementById('slider-atr_mult').value);
+
+  // 交易数：参数越严格，交易越少
+  const strictness = (volR - 1) * 0.3 + (qual - 50) * 0.015 + (buf - 1) * 0.15 + (2 - atr) * 0.1;
+  const tradeFactor = Math.max(0.2, 1 - strictness * 0.5);
+  const estTrades = Math.round(D.metrics.total_trades * tradeFactor);
+
+  // 胜率：严格度提升胜率
+  const wrBoost = strictness * 3;
+  const estWR = Math.min(75, D.metrics.win_rate + wrBoost);
+
+  // 盈亏比：紧止损降低盈亏比
+  const pfFactor = 1 + (atr - 2) * 0.15 - strictness * 0.1;
+  const estPF = Math.max(1.0, D.metrics.profit_factor * pfFactor);
+
+  // 年化：交易数减少但胜率提升的综合
+  const retFactor = tradeFactor * (1 + wrBoost * 0.01);
+  const estAnnual = (D.metrics.annual_return * retFactor).toFixed(1);
+
+  const estMDD = (D.metrics.max_drawdown * (0.8 + strictness * 0.3)).toFixed(1);
+
+  const metrics = [
+    {label: '预估交易数', value: estTrades, cls: 'neutral', sub: `原 ${D.metrics.total_trades}`},
+    {label: '预估胜率', value: estWR.toFixed(1) + '%', cls: 'positive', sub: `原 ${D.metrics.win_rate}%`},
+    {label: '预估盈亏比', value: estPF.toFixed(2), cls: 'neutral', sub: `原 ${D.metrics.profit_factor}`},
+    {label: '预估年化', value: estAnnual + '%', cls: 'positive', sub: '估算值'},
+    {label: '预估回撤', value: estMDD + '%', cls: 'negative', sub: '估算值'},
+    {label: '严格度指数', value: (strictness * 100).toFixed(0), cls: 'neutral', sub: '0=默认, 越高越严'},
+  ];
+  document.getElementById('paramMetrics').innerHTML = metrics.map(m => `
+    <div class="metric-card">
+      <div class="metric-label">${m.label}</div>
+      <div class="metric-value ${m.cls}">${m.value}</div>
+      <div class="metric-sub">${m.sub}</div>
+    </div>
+  `).join('');
+}
+
+renderParams();
+estimateImpact();
+
+// ===== 对比分析（静态HTML，无需JS） =====
+
+// ===== 个股K线 =====
+let klineChart = null;
+let currentStockCode = null;
+let klineInited = false;
+
+function initKlineTab() {
+  if (klineInited) return;
+  klineInited = true;
+  
+  const select = document.getElementById('klineStockSelect');
+  if (!select) return;
+  
+  const codes = Object.keys(STOCK_KLINE_DATA).sort();
+  codes.forEach(code => {
+    const s = STOCK_KLINE_DATA[code];
+    const winRate = s.trades.length > 0 ? (s.trades.filter(t => t.pnl_pct > 0).length / s.trades.length * 100).toFixed(1) : 0;
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = `${code} ${s.name} (${s.trades.length}笔, 胜率${winRate}%)`;
+    select.appendChild(opt);
+  });
+  
+  select.addEventListener('change', () => renderStockKline(select.value));
+  
+  if (codes.length > 0) renderStockKline(codes[0]);
+}
+
+function renderStockKline(code) {
+  currentStockCode = code;
+  const stock = STOCK_KLINE_DATA[code];
+  if (!stock) return;
+  
+  const trades = stock.trades;
+  const wins = trades.filter(t => t.pnl_pct > 0);
+  const winRate = trades.length > 0 ? (wins.length / trades.length * 100).toFixed(1) : 0;
+  const totalPnl = trades.reduce((s, t) => s + t.pnl_pct, 0);
+  const avgPnl = trades.length > 0 ? (totalPnl / trades.length * 100).toFixed(2) : 0;
+  const avgHold = trades.length > 0 ? (trades.reduce((s, t) => s + t.hold_days, 0) / trades.length).toFixed(1) : 0;
+  
+  document.getElementById('klineStats').innerHTML = `
+    <div>股票：<strong style="color:#f1f5f9;">${code} ${stock.name}</strong></div>
+    <div>交易：<strong style="color:#38bdf8;">${trades.length}</strong>笔</div>
+    <div>胜率：<strong style="color:${winRate >= 60 ? '#4ade80' : '#fbbf24'};">${winRate}%</strong></div>
+    <div>累计收益：<strong style="color:${totalPnl >= 0 ? '#4ade80' : '#f87171'};">${(totalPnl * 100).toFixed(1)}%</strong></div>
+    <div>平均收益：<strong style="color:${avgPnl >= 0 ? '#4ade80' : '#f87171'};">${avgPnl}%</strong></div>
+    <div>平均持仓：<strong style="color:#f1f5f9;">${avgHold}天</strong></div>
+  `;
+  
+  // 交易记录表格
+  const tbody = document.getElementById('klineTradeBody');
+  tbody.innerHTML = trades.map((t, i) => {
+    const pnlCls = t.pnl_pct > 0 ? 'win' : 'loss';
+    return `<tr style="cursor:pointer;" onclick="focusTrade(${i})">
+      <td>${i + 1}</td>
+      <td>${t.pattern}</td>
+      <td>${t.entry_date}</td>
+      <td>${t.entry_price}</td>
+      <td>${t.exit_date}</td>
+      <td>${t.exit_price}</td>
+      <td class="${pnlCls}"><strong>${(t.pnl_pct * 100).toFixed(2)}%</strong></td>
+      <td>${t.hold_days}天</td>
+      <td>${t.exit_reason}</td>
+      <td>${(t.max_profit * 100).toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+  
+  // 用Chart.js绘制K线图
+  drawKlineChart(stock);
+}
+
+function drawKlineChart(stock) {
+  const ctx = document.getElementById('klineChartCanvas');
+  if (!ctx) return;
+  
+  if (klineChart) {
+    klineChart.destroy();
+  }
+  
+  const klines = stock.klines;
+  const labels = klines.map(k => k.time);
+  
+  // 涨跌颜色
+  const colors = klines.map(k => k.close >= k.open ? '#4ade80' : '#f87171');
+  
+  // K线实体（floating bar: [min(open,close), max(open,close)]）
+  const bodyData = klines.map(k => [Math.min(k.open, k.close), Math.max(k.open, k.close)]);
+  
+  // 影线数据（用scatter绘制高低线）
+  const wickData = [];
+  klines.forEach((k, i) => {
+    wickData.push({ x: i, y: k.high, label: k.time });
+    wickData.push({ x: i, y: k.low, label: k.time });
+  });
+  
+  // 买入点（用日期字符串定位，与category轴对齐）
+  const buyPoints = stock.trades.map(t => {
+    const idx = klines.findIndex(k => k.time === t.entry_date);
+    const useIdx = idx >= 0 ? idx : klines.findIndex(k => k.time >= t.entry_date);
+    return useIdx >= 0 ? { x: klines[useIdx].time, y: t.entry_price, label: `买入 ${t.entry_date} ${t.pattern} 价:${t.entry_price}` } : null;
+  }).filter(p => p !== null);
+  
+  // 卖出点（用日期字符串定位，与category轴对齐）
+  const sellPoints = stock.trades.map(t => {
+    const idx = klines.findIndex(k => k.time === t.exit_date);
+    const useIdx = idx >= 0 ? idx : klines.findIndex(k => k.time >= t.exit_date);
+    return useIdx >= 0 ? { x: klines[useIdx].time, y: t.exit_price, label: `卖出 ${t.exit_date} ${t.exit_reason} 价:${t.exit_price}` } : null;
+  }).filter(p => p !== null);
+  
+  klineChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'K线',
+          data: bodyData,
+          backgroundColor: colors,
+          borderColor: colors,
+          borderWidth: 1,
+          barPercentage: 0.9,
+          categoryPercentage: 0.9
+        },
+        {
+          label: '买入',
+          type: 'scatter',
+          data: buyPoints,
+          backgroundColor: '#4ade80',
+          borderColor: '#4ade80',
+          pointStyle: 'triangle',
+          pointRadius: 8,
+          pointHoverRadius: 10,
+          showLine: false
+        },
+        {
+          label: '卖出',
+          type: 'scatter',
+          data: sellPoints,
+          backgroundColor: '#f87171',
+          borderColor: '#f87171',
+          pointStyle: 'triangle',
+          pointRadius: 8,
+          pointHoverRadius: 10,
+          rotation: 180,
+          showLine: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, labels: { color: '#94a3b8', usePointStyle: true } },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#f1f5f9',
+          bodyColor: '#94a3b8',
+          borderColor: '#334155',
+          borderWidth: 1,
+          callbacks: {
+            title: function(items) {
+              const idx = items[0].dataIndex;
+              return klines[idx].time;
+            },
+            label: function(context) {
+              if (context.dataset.label === 'K线') {
+                const k = klines[context.dataIndex];
+                return [
+                  `开: ${k.open}  高: ${k.high}`,
+                  `低: ${k.low}  收: ${k.close}`,
+                  `量: ${(k.volume / 10000).toFixed(0)}万`
+                ];
+              }
+              return context.raw.label || '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          display: true,
+          grid: { color: '#1e293b' },
+          ticks: {
+            color: '#94a3b8',
+            maxTicksLimit: 12,
+            maxRotation: 0
+          }
+        },
+        y: {
+          display: true,
+          position: 'right',
+          grid: { color: '#1e293b' },
+          ticks: { color: '#94a3b8' },
+          beginAtZero: false
+        }
+      }
+    }
+  });
+}
+
+function focusTrade(index) {
+  const stock = STOCK_KLINE_DATA[currentStockCode];
+  if (!stock || !stock.trades[index] || !klineChart) return;
+  const t = stock.trades[index];
+  const entryIdx = stock.klines.findIndex(k => k.time >= t.entry_date);
+  if (entryIdx >= 0) {
+    const from = Math.max(0, entryIdx - 20);
+    const to = Math.min(stock.klines.length - 1, entryIdx + 40);
+    klineChart.options.scales.x.min = stock.klines[from].time;
+    klineChart.options.scales.x.max = stock.klines[to].time;
+    klineChart.update();
+  }
+}
+
+function resetKlineView() {
+  if (klineChart) {
+    klineChart.options.scales.x.min = undefined;
+    klineChart.options.scales.x.max = undefined;
+    klineChart.update();
+  }
+}
+
+// ===== Tab切换 =====
+function switchTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('.tab[data-tab="' + tabName + '"]').classList.add('active');
+  document.getElementById('tab-' + tabName).classList.add('active');
+  window.scrollTo(0, 0);
+  if (tabName === 'kline') {
+    setTimeout(() => {
+      initKlineTab();
+      if (klineChart) klineChart.resize();
+    }, 100);
+  }
+}
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    switchTab(tab.dataset.tab);
+  });
+});
+</script>
+</body>
+</html>
